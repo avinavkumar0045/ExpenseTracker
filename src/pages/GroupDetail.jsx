@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom"
 import { auth, supabase } from "../supabase/client"
 
 /**
@@ -18,7 +18,9 @@ import { auth, supabase } from "../supabase/client"
  * - expenses (expense_id, group_id, item_name, amount, paid_by)
  */
 export default function GroupDetail() {
-  const { id } = useParams() // Get group_id from URL
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const location = useLocation()
   const user = auth.getUser()
   
   // State management
@@ -95,7 +97,7 @@ export default function GroupDetail() {
       <div style={{ marginBottom: "28px" }}>
         <Link to="/groups" style={{ fontSize: "13px", color: "var(--text-muted)", fontWeight: "600" }}>← Back to Groups</Link>
         <h1 style={{ fontSize: "30px", fontWeight: "800", letterSpacing: "-0.03em", marginTop: "10px" }}>{group.group_name}</h1>
-        
+
         {/* Group wallet balance badge */}
         {wallet && (
           <div style={{
@@ -113,6 +115,37 @@ export default function GroupDetail() {
             </span>
           </div>
         )}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: "4px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "1px" }}>
+        {[
+          { key: "expenses", label: "Expenses", path: `/group/${id}` },
+          { key: "members", label: "Members", path: `/group/${id}` },
+          { key: "settlements", label: "Settlements", path: `/group/${id}/settlements` }
+        ].map(tab => {
+          const isActive = location.pathname === tab.path || (tab.key === "expenses" && location.pathname === `/group/${id}` && !location.pathname.includes("settlements"))
+          return (
+            <button
+              key={tab.key}
+              onClick={() => navigate(tab.path)}
+              style={{
+                padding: "10px 20px",
+                borderRadius: "8px 8px 0 0",
+                border: "none",
+                borderBottom: isActive ? "2px solid var(--accent)" : "2px solid transparent",
+                background: "transparent",
+                color: isActive ? "var(--accent)" : "var(--text-secondary)",
+                fontWeight: isActive ? "700" : "500",
+                fontSize: "14px",
+                cursor: "pointer",
+                marginBottom: "-1px"
+              }}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "20px" }}>
