@@ -14,6 +14,9 @@ import AddExpense from './pages/AddExpense'
 import Contribute from './pages/Contribute'
 import Wallet from './pages/Wallet'
 import Notifications from './pages/Notifications'
+import Budgets from './pages/Budgets'
+import Reports from './pages/Reports'
+import Settlements from './pages/Settlements'
 
 function ProtectedRoute({ children }) {
   const [user, setUser] = useState(null)
@@ -52,7 +55,10 @@ export default function App() {
         <Route path="/contribute" element={<ProtectedRoute><Contribute /></ProtectedRoute>} />
         <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-        
+        <Route path="/budgets" element={<ProtectedRoute><Budgets /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route path="/group/:id/settlements" element={<ProtectedRoute><Settlements /></ProtectedRoute>} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

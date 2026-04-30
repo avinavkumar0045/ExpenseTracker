@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { auth, supabase } from "../supabase/client"
+import { auth } from "../supabase/client"
 
 export default function Register() {
   const [form, setForm] = useState({ name: "", email: "", login_password: "", transaction_password: "", dob: "", contact: "" })
@@ -24,12 +24,6 @@ export default function Register() {
         dob: form.dob,
         contact: parseFloat(form.contact)
       })
-
-      // Initialize personal wallet
-      await supabase.from("personal_wallet").insert([{
-        user_id: user.user_id,
-        balance: 0
-      }])
 
       auth.setUser(user)
       navigate("/dashboard")

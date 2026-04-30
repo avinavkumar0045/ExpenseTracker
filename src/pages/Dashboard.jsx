@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { auth, supabase } from "../supabase/client"
+import InsightsPanel from "../components/InsightsPanel"
+import { CategoryPieChart, MonthlyBarChart } from "../components/AnalyticsCharts"
 
-function StatCard({ title, value, sub, accent }) {
+function StatCard({ title, value, sub, accent, icon }) {
   return (
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "16px", padding: "24px", position: "relative", overflow: "hidden" }}>
-      <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: "600", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "10px" }}>{title}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+        <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: "600", letterSpacing: "0.06em", textTransform: "uppercase" }}>{title}</div>
+        {icon && <div style={{ fontSize: "20px" }}>{icon}</div>}
+      </div>
       <div style={{ fontSize: "28px", fontWeight: "800", letterSpacing: "-0.02em", color: accent || "var(--text-primary)" }}>{value}</div>
       {sub && <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px" }}>{sub}</div>}
     </div>
@@ -19,6 +24,11 @@ export default function Dashboard() {
   const [recentTransactions, setRecentTransactions] = useState([])
   const [notificationsCount, setNotificationsCount] = useState(0)
   const [totalExpenses, setTotalExpenses] = useState(0)
+  const [monthlyExpenses, setMonthlyExpenses] = useState(0)
+  const [allExpenses, setAllExpenses] = useState([])
+  const [allTransactions, setAllTransactions] = useState([])
+  const [budgets, setBudgets] = useState([])
+  const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
@@ -32,40 +42,130 @@ export default function Dashboard() {
   async function fetchData(userId) {
     setLoading(true)
     try {
-      const [walletRes, groupsRes, txRes, notifRes, expRes] = await Promise.all([
+      const now = new Date()
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+      const [walletRes, groupsRes, txRes, notifRes, expRes, allExpRes, allTxRes, budgetRes, groupListRes] = await Promise.all([
         supabase.from("personal_wallet").select("balance").eq("user_id", userId).single(),
         supabase.from("group_members").select("membership_id").eq("user_id", userId),
         supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(6),
         supabase.from("notifications").select("notification_id", { count: "exact", head: true }).eq("user_id", userId).eq("is_read", false),
-        supabase.from("expenses").select("amount").eq("paid_by", userId)
+        supabase.from("expenses").select("amount").eq("paid_by", userId),
+        supabase.from("expenses").select("*").eq("paid_by", userId),
+        supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(100),
+        supabase.from("budgets").select("*").eq("user_id", userId),
+        supabase.from("group_members").select("groups(group_id, group_name)").eq("user_id", userId)
       ])
+
       setWalletBalance(walletRes.data?.balance || 0)
       setTotalGroups(groupsRes.data?.length || 0)
       setRecentTransactions(txRes.data || [])
       setNotificationsCount(notifRes.count || 0)
+
       const sum = (expRes.data || []).reduce((s, e) => s + (e.amount || 0), 0)
       setTotalExpenses(sum)
+
+      const monthlySum = (expRes.data || []).reduce((s, e) => {
+        const d = new Date(e.expense_date || e.created_at)
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() ? s + (e.amount || 0) : s
+      }, 0)
+      setMonthlyExpenses(monthlySum)
+
+      setAllExpenses(allExpRes.data || [])
+      setAllTransactions(allTxRes.data || [])
+      setBudgets(budgetRes.data || [])
+      setGroups((groupListRes.data || []).map(d => d.groups).filter(Boolean))
     } catch (e) { console.error(e) }
     setLoading(false)
   }
 
   const displayName = user?.name || user?.email?.split("@")[0] || "User"
 
+  // Get current month budget status
+  const now = new Date()
+  const currentBudgets = budgets.filter(b => b.month === now.getMonth() + 1 && b.year === now.getFullYear())
+
   return (
-    <div style={{ maxWidth: "1100px" }}>
+    <div style={{ maxWidth: "1200px" }}>
+      {/* Header */}
       <div style={{ marginBottom: "32px" }}>
         <div style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}</div>
-        <h1 style={{ fontSize: "32px", fontWeight: "800", letterSpacing: "-0.03em" }}>Hey, {displayName} 👋</h1>
+        <h1 style={{ fontSize: "32px", fontWeight: "800", letterSpacing: "-0.03em" }}>Hey, {displayName}</h1>
         <p style={{ color: "var(--text-secondary)", marginTop: "6px", fontSize: "14px" }}>Here's your financial summary</p>
       </div>
 
+      {/* Stat Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "32px" }}>
-        <StatCard title="Wallet Balance" value={loading ? "—" : `₹${walletBalance.toFixed(2)}`} sub="Personal wallet" accent="var(--accent)" />
-        <StatCard title="Active Groups" value={loading ? "—" : totalGroups} sub="You're a member" />
-        <StatCard title="Total Spent" value={loading ? "—" : `₹${totalExpenses.toFixed(2)}`} sub="Your expenses" accent="var(--red)" />
-        <StatCard title="Notifications" value={loading ? "—" : notificationsCount} sub="Unread alerts" accent={notificationsCount > 0 ? "var(--amber)" : undefined} />
+        <StatCard title="Wallet Balance" value={loading ? "—" : `Rs.${walletBalance.toFixed(2)}`} sub="Personal wallet" accent="var(--accent)" icon="💳" />
+        <StatCard title="This Month" value={loading ? "—" : `Rs.${monthlyExpenses.toFixed(2)}`} sub="Total spent" accent="var(--red)" icon="📊" />
+        <StatCard title="Active Groups" value={loading ? "—" : totalGroups} sub="You're a member" accent="var(--blue)" icon="👥" />
+        <StatCard title="Notifications" value={loading ? "—" : notificationsCount} sub="Unread alerts" accent={notificationsCount > 0 ? "var(--amber)" : undefined} icon="🔔" />
       </div>
 
+      {/* Insights Panel */}
+      {!loading && (
+        <InsightsPanel
+          transactions={allTransactions}
+          expenses={allExpenses}
+          budgets={budgets}
+          groups={groups}
+        />
+      )}
+
+      {/* Budget Overview */}
+      {currentBudgets.length > 0 && (
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "16px", padding: "24px", marginBottom: "24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Budget Overview — {now.toLocaleString("en-IN", { month: "long", year: "numeric" })}</div>
+            <Link to="/budgets" style={{ fontSize: "12px", color: "var(--accent)", fontWeight: "700" }}>Manage →</Link>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+            {currentBudgets.map(b => {
+              const spent = allExpenses
+                .filter(e => {
+                  const d = new Date(e.expense_date || e.created_at)
+                  return d.getMonth() + 1 === b.month && d.getFullYear() === b.year && (!b.category || e.category === b.category)
+                })
+                .reduce((sum, e) => sum + parseFloat(e.amount || 0), 0)
+              const pct = Math.min((spent / parseFloat(b.amount)) * 100, 100)
+              const statusColor = pct >= 100 ? "var(--red)" : pct >= 80 ? "var(--amber)" : "var(--green)"
+
+              return (
+                <div key={b.budget_id} style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "12px", padding: "16px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "8px", textTransform: "capitalize" }}>
+                    {b.category || "Overall"}
+                  </div>
+                  <div style={{ fontSize: "18px", fontWeight: "800", color: statusColor, marginBottom: "8px" }}>
+                    {pct.toFixed(0)}%
+                  </div>
+                  <div style={{ width: "100%", height: "6px", background: "var(--bg-secondary)", borderRadius: "100px", overflow: "hidden" }}>
+                    <div style={{ width: `${pct}%`, height: "100%", background: statusColor, borderRadius: "100px" }} />
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "8px" }}>
+                    Rs.{spent.toFixed(2)} / Rs.{parseFloat(b.amount).toFixed(2)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Analytics Charts */}
+      {!loading && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px", marginBottom: "24px" }}>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "16px", padding: "24px" }}>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "16px" }}>Category Breakdown</div>
+            <CategoryPieChart expenses={allExpenses} />
+          </div>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "16px", padding: "24px" }}>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "16px" }}>Monthly Trends</div>
+            <MonthlyBarChart transactions={allTransactions} />
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions */}
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "16px", padding: "24px", marginBottom: "24px" }}>
         <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "16px" }}>Quick Actions</div>
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
@@ -74,14 +174,17 @@ export default function Dashboard() {
             { label: "Contribute", to: "/contribute" },
             { label: "New Group", to: "/groups" },
             { label: "My Wallet", to: "/wallet" },
+            { label: "Budgets", to: "/budgets" },
+            { label: "Reports", to: "/reports" },
           ].map(a => (
             <Link key={a.to} to={a.to}>
-              <button style={{ padding: "10px 20px", borderRadius: "10px", background: a.primary ? "var(--accent)" : "var(--bg-tertiary)", color: a.primary ? "#000" : "var(--text-secondary)", fontWeight: "700", fontSize: "13px", border: a.primary ? "none" : "1px solid var(--border)" }}>{a.label}</button>
+              <button style={{ padding: "10px 20px", borderRadius: "10px", background: a.primary ? "var(--accent)" : "var(--bg-tertiary)", color: a.primary ? "#000" : "var(--text-secondary)", fontWeight: "700", fontSize: "13px", border: a.primary ? "none" : "1px solid var(--border)", cursor: "pointer" }}>{a.label}</button>
             </Link>
           ))}
         </div>
       </div>
 
+      {/* Recent Transactions */}
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "16px", padding: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Recent Transactions</div>
@@ -93,7 +196,7 @@ export default function Dashboard() {
           <div style={{ textAlign: "center", padding: "40px" }}>
             <div style={{ fontSize: "32px", marginBottom: "12px" }}>💸</div>
             <div style={{ color: "var(--text-muted)", fontSize: "14px" }}>No transactions yet</div>
-            <Link to="/add-expense"><button style={{ marginTop: "16px", padding: "10px 20px", borderRadius: "10px", background: "var(--accent)", color: "#000", fontWeight: "700", fontSize: "13px", border: "none" }}>Add your first expense</button></Link>
+            <Link to="/add-expense"><button style={{ marginTop: "16px", padding: "10px 20px", borderRadius: "10px", background: "var(--accent)", color: "#000", fontWeight: "700", fontSize: "13px", border: "none", cursor: "pointer" }}>Add your first expense</button></Link>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -111,7 +214,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div style={{ fontWeight: "800", fontSize: "15px", color: isCredit ? "var(--green)" : "var(--red)" }}>
-                    {isCredit ? "+" : "−"}₹{Math.abs(tx.amount || 0).toFixed(2)}
+                    {isCredit ? "+" : "−"}Rs.{Math.abs(tx.amount || 0).toFixed(2)}
                   </div>
                 </div>
               )

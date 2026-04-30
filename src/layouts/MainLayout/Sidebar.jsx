@@ -6,6 +6,8 @@ const menuItems = [
   { path: "/wallet", label: "Wallet", icon: "◉" },
   { path: "/add-expense", label: "Add Expense", icon: "+" },
   { path: "/contribute", label: "Contribute", icon: "↑" },
+  { path: "/budgets", label: "Budgets", icon: "B" },
+  { path: "/reports", label: "Reports", icon: "R" },
   { path: "/notifications", label: "Notifications", icon: "◎" },
 ]
 
