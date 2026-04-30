@@ -47,3 +47,75 @@ input, select, textarea { outline: none; font-family: inherit; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-secondary); }
 ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+
+/* React DatePicker Dark Theme */
+.dark-datepicker {
+  width: 100% !important;
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  color: var(--text-primary) !important;
+  padding: 10px 12px !important;
+  font-size: 13px !important;
+  font-family: inherit !important;
+  outline: none !important;
+  cursor: pointer !important;
+}
+
+.dark-calendar {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  font-family: inherit !important;
+}
+
+.dark-calendar .react-datepicker__header {
+  background: var(--bg-tertiary) !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 12px 12px 0 0 !important;
+}
+
+.dark-calendar .react-datepicker__current-month,
+.dark-calendar .react-datepicker__day-name {
+  color: var(--text-primary) !important;
+}
+
+.dark-calendar .react-datepicker__day {
+  color: var(--text-secondary) !important;
+}
+
+.dark-calendar .react-datepicker__day:hover {
+  background: var(--accent-dim) !important;
+  color: var(--accent) !important;
+  border-radius: 6px !important;
+}
+
+.dark-calendar .react-datepicker__day--selected,
+.dark-calendar .react-datepicker__day--keyboard-selected {
+  background: var(--accent) !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+  border-radius: 6px !important;
+}
+
+.dark-calendar .react-datepicker__day--disabled {
+  color: var(--text-muted) !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.dark-calendar .react-datepicker__day--outside-month {
+  color: var(--text-muted) !important;
+}
+
+.dark-calendar .react-datepicker__navigation-icon::before {
+  border-color: var(--text-secondary) !important;
+}
+
+.dark-calendar .react-datepicker__navigation:hover .react-datepicker__navigation-icon::before {
+  border-color: var(--accent) !important;
+}
+
+.dark-calendar .react-datepicker__triangle {
+  display: none !important;
+}

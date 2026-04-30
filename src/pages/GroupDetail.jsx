@@ -362,6 +362,8 @@ export default function GroupDetail() {
           )}
         </div>
       </div>
+
+
     </div>
   )
 }

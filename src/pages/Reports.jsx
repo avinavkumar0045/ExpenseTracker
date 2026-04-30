@@ -1,13 +1,21 @@
 import { useState, useEffect } from "react"
+import DatePicker from "react-datepicker"
+import "react-datepicker/dist/react-datepicker.css"
 import { auth, supabase } from "../supabase/client"
 import { exportToCSV, exportToPDF, formatCurrency, formatDate } from "../utils/exportHelpers"
-import { getMonthOptions, getYearOptions } from "../utils/dateFilters"
+
+function formatInputDate(date) {
+  return date.toISOString().split("T")[0]
+}
 
 export default function Reports() {
   const user = auth.getUser()
+  const today = new Date()
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+
   const [reportType, setReportType] = useState("monthly")
-  const [month, setMonth] = useState(new Date().getMonth() + 1)
-  const [year, setYear] = useState(new Date().getFullYear())
+  const [fromDate, setFromDate] = useState(startOfMonth)
+  const [toDate, setToDate] = useState(today)
   const [groupFilter, setGroupFilter] = useState("all")
   const [userGroups, setUserGroups] = useState([])
   const [previewData, setPreviewData] = useState([])
@@ -27,7 +35,10 @@ export default function Reports() {
 
   useEffect(() => {
     generatePreview()
-  }, [reportType, month, year, groupFilter])
+  }, [reportType, fromDate, toDate, groupFilter])
+
+  const fromDateStr = formatInputDate(fromDate)
+  const toDateStr = formatInputDate(toDate)
 
   async function fetchUserGroups() {
     const { data } = await supabase
@@ -65,11 +76,15 @@ export default function Reports() {
     try {
       let data = []
       let reportHeaders = []
-      const startDate = `${year}-${String(month).padStart(2, "0")}-01`
-      const endDate = new Date(year, month, 0).toISOString().split("T")[0]
+      // Validate date range
+      if (fromDate > toDate) {
+        setError("From Date cannot be later than To Date")
+        setLoading(false)
+        return
+      }
 
       // Get all expense IDs user is involved in
-      const involvedIds = await getInvolvedExpenseIds(startDate, endDate)
+      const involvedIds = await getInvolvedExpenseIds(fromDateStr, toDateStr)
       if (involvedIds.length === 0) {
         setPreviewData([])
         setHeaders([])
@@ -82,8 +97,8 @@ export default function Reports() {
         .from("expenses")
         .select("*, groups(group_name), expense_splits(user_id, share_amount, payment_status)")
         .in("expense_id", involvedIds)
-        .gte("expense_date", startDate)
-        .lte("expense_date", endDate)
+        .gte("expense_date", fromDateStr)
+        .lte("expense_date", toDateStr)
 
       if (groupFilter !== "all") {
         query = query.eq("group_id", parseInt(groupFilter))
@@ -182,17 +197,38 @@ export default function Reports() {
   }
 
   const handleExportCSV = () => {
-    const monthName = getMonthOptions().find(m => m.value === month)?.label
-    const filename = `expenseflow_${reportType}_${monthName}_${year}`
+    const filename = `expenseflow_${reportType}_${fromDateStr}_to_${toDateStr}`
     exportToCSV(previewData, headers, filename)
   }
 
   const handleExportPDF = () => {
-    const monthName = getMonthOptions().find(m => m.value === month)?.label
     const title = reportTypes.find(t => t.value === reportType)?.label || "Report"
-    const subtitle = `${monthName} ${year} — ${previewData.length} records`
-    const filename = `expenseflow_${reportType}_${monthName}_${year}`
+    const subtitle = `${fromDateStr} to ${toDateStr} — ${previewData.length} records`
+    const filename = `expenseflow_${reportType}_${fromDateStr}_to_${toDateStr}`
     exportToPDF(title, subtitle, headers, previewData, filename)
+  }
+
+  const applyQuickFilter = (preset) => {
+    const now = new Date()
+    let from, to
+    switch (preset) {
+      case "last7":
+        from = new Date(now); from.setDate(now.getDate() - 6)
+        to = new Date(now)
+        break
+      case "last30":
+        from = new Date(now); from.setDate(now.getDate() - 29)
+        to = new Date(now)
+        break
+      case "thisMonth":
+        from = new Date(now.getFullYear(), now.getMonth(), 1)
+        to = new Date(now)
+        break
+      default:
+        return
+    }
+    setFromDate(from)
+    setToDate(to)
   }
 
   return (
@@ -227,20 +263,54 @@ export default function Reports() {
             </select>
           </div>
 
-          {/* Month */}
+          {/* From Date */}
           <div>
-            <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "6px", textTransform: "uppercase" }}>Month</label>
-            <select value={month} onChange={e => setMonth(parseInt(e.target.value))} style={{ width: "100%", background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", padding: "10px 12px", fontSize: "13px" }}>
-              {getMonthOptions().map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "6px", textTransform: "uppercase" }}>From</label>
+            <DatePicker
+              selected={fromDate}
+              onChange={date => setFromDate(date)}
+              maxDate={today}
+              placeholderText="Select start date"
+              dateFormat="yyyy-MM-dd"
+              className="dark-datepicker"
+              calendarClassName="dark-calendar"
+            />
           </div>
 
-          {/* Year */}
+          {/* To Date */}
           <div>
-            <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "6px", textTransform: "uppercase" }}>Year</label>
-            <select value={year} onChange={e => setYear(parseInt(e.target.value))} style={{ width: "100%", background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-primary)", padding: "10px 12px", fontSize: "13px" }}>
-              {getYearOptions().map(y => <option key={y.value} value={y.value}>{y.label}</option>)}
-            </select>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "6px", textTransform: "uppercase" }}>To</label>
+            <DatePicker
+              selected={toDate}
+              onChange={date => setToDate(date)}
+              maxDate={today}
+              minDate={fromDate}
+              placeholderText="Select end date"
+              dateFormat="yyyy-MM-dd"
+              className="dark-datepicker"
+              calendarClassName="dark-calendar"
+            />
+          </div>
+        </div>
+
+        {/* Quick Filters */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+          {[
+            { key: "last7", label: "Last 7 Days" },
+            { key: "last30", label: "Last 30 Days" },
+            { key: "thisMonth", label: "This Month" }
+          ].map(f => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => applyQuickFilter(f.key)}
+              style={{ padding: "6px 12px", borderRadius: "6px", background: "var(--bg-tertiary)", color: "var(--text-secondary)", fontWeight: "600", fontSize: "12px", border: "1px solid var(--border)", cursor: "pointer" }}
+            >
+              {f.label}
+            </button>
+          ))}
+          <div style={{ marginLeft: "auto", fontSize: "12px", color: "var(--text-muted)", display: "flex", alignItems: "center" }}>
+            {fromDateStr} → {toDateStr}
           </div>
         </div>
 
@@ -274,7 +344,8 @@ export default function Reports() {
         ) : previewData.length === 0 ? (
           <div style={{ textAlign: "center", padding: "48px" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>📭</div>
-            <div style={{ color: "var(--text-muted)", fontSize: "14px" }}>No data for selected period</div>
+            <div style={{ color: "white", fontSize: "14px", fontWeight: "600" }}>No data available for the selected date range.</div>
+            <div style={{ color: "white", fontSize: "12px", marginTop: "6px" }}>Try adjusting your From/To dates or filters.</div>
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
